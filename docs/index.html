@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI表情包生成器</title>
+    <style>
+        :root {
+            --primary-color: #FF6B6B;
+            --secondary-color: #4ECDC4;
+            --background-color: #f9f9f9;
+            --text-color: #2C3E50;
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            font-size: 2.5em;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .header p {
+            color: #666;
+            margin: 0;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #ff5252;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .response-section {
+            margin-top: 30px;
+        }
+
+        .response-container {
+            background: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        #response {
+            padding: 20px;
+            min-height: 100px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .loading:after {
+            content: '...';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80% { content: '....'; }
+            100% { content: '.....'; }
+        }
+
+        .result-card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .generated-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .generated-image:hover {
+            transform: scale(1.02);
+        }
+
+        .download-btn {
+            background-color: var(--secondary-color);
+            margin-top: 10px;
+            font-size: 14px;
+            padding: 10px 20px;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: var(--border-radius);
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+        }
+
+        .error-message {
+            color: #dc3545;
+            padding: 10px;
+            border-radius: var(--border-radius);
+            background-color: #fff3f3;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 AI表情包生成器</h1>
+            <p>输入文字描述，AI帮你生成有趣的表情包</p>
+        </div>
+        
+        <div class="input-section">
+            <textarea id="input" placeholder="例如：'开心的柴犬' 或 '愤怒的猫咪'..."></textarea>
+            <button onclick="sendRequest()">✨ 生成表情包</button>
+        </div>
+        
+        <div class="response-section">
+            <div id="response"></div>
+        </div>
+    </div>
+    
+    <script>
+    // Coze API配置
+    const CONFIG = {
+        coze: {
+            apiUrl: 'https://api.coze.cn/v3/chat',
+            botId: '7464136676534140979',
+            token: 'pat_D3mAfLCSU9VWBqKYiYMCqOvQHeyc2z3rsqrSaUIqDM0bI5IgacSA21y9FCQTB3Lp'
+        }
+    };
+
+    async function sendRequest() {
+        const input = document.getElementById('input');
+        const response = document.getElementById('response');
+        const content = input.value.trim();
+
+        if (!content) {
+            alert('请输入表情包描述！');
+            return;
+        }
+
+        // 显示加载动画
+        response.innerHTML = '<div class="loading">正在绘制你的表情包</div>';
+
+        try {
+            const requestBody = {
+                bot_id: CONFIG.coze.botId,
+                user_id: '123456789',
+                stream: true,
+                auto_save_history: true,
+                additional_messages: [
+                    {
+                        role: 'user',
+                        content: content,
+                        content_type: 'text'
+                    }
+                ]
+            };
+
+            const response_stream = await fetch(CONFIG.coze.apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${CONFIG.coze.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response_stream.ok) {
+                throw new Error(`HTTP error! status: ${response_stream.status}`);
+            }
+
+            // 创建响应流读取器
+            const reader = response_stream.body.getReader();
+            const decoder = new TextDecoder();
+
+            // 读取流数据
+            let buffer = '';
+            let finalContent = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || '';
+
+                for (const event of events) {
+                    if (!event.trim()) continue;
+                    
+                    const [eventLine, dataLine] = event.split('\n');
+                    const eventType = eventLine.replace('event:', '');
+                    const data = dataLine.replace('data:', '');
+
+                    if (eventType === 'done') continue;
+
+                    try {
+                        const parsedData = JSON.parse(data);
+                        
+                        if (eventType === 'conversation.message.delta' && 
+                            parsedData.type === 'answer' && 
+                            parsedData.content) {
+                            finalContent = parsedData.content;
+                        }
+                        
+                        if (eventType === 'conversation.chat.completed') {
+                            const statusDiv = document.createElement('div');
+                            statusDiv.className = 'status';
+                            statusDiv.textContent = `✨ 生成完成 (消耗: ${parsedData.usage.token_count} tokens)`;
+                            response.appendChild(statusDiv);
+                        }
+                    } catch (e) {
+                        console.error('处理消息时出错:', e);
+                    }
+                }
+            }
+
+            // 显示最终的content内容
+            if (finalContent) {
+                response.innerHTML = ''; // 清空之前的内容
+                const resultCard = document.createElement('div');
+                resultCard.className = 'result-card';
+                
+                if (finalContent.startsWith('http')) {
+                    // 创建图片容器
+                    const imageContainer = document.createElement('div');
+                    imageContainer.className = 'image-container';
+                    
+                    // 创建图片元素
+                    const img = document.createElement('img');
+                    img.src = finalContent;
+                    img.alt = '生成的表情包';
+                    img.className = 'generated-image';
+                    
+                    // 创建下载按钮
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.textContent = '⬇️ 保存表情包';
+                    downloadBtn.onclick = () => window.open(finalContent, '_blank');
+                    
+                    imageContainer.appendChild(img);
+                    imageContainer.appendChild(downloadBtn);
+                    resultCard.appendChild(imageContainer);
+                } else {
+                    resultCard.textContent = finalContent;
+                }
+                
+                response.appendChild(resultCard);
+            }
+
+        } catch (error) {
+            response.innerHTML = `
+                <div class="error-message">
+                    <strong>😢 出错了：</strong><br>
+                    ${error.message}
+                    ${error.message.includes('401') ? '<br>API密钥可能无效，请检查token是否正确。' : ''}
+                    ${error.message.includes('404') ? '<br>接口地址可能有误，请检查apiUrl配置。' : ''}
+                    ${error.message.includes('Failed to fetch') ? '<br>网络连接失败，请检查网络连接。' : ''}
+                </div>
+            `;
+        }
+    }
+    </script>
+</body>
+</html>
