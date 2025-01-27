@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI表情包生成器</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #45a049;
+            --background-color: #f9f9f9;
+            --text-color: #2C3E50;
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            font-size: 2.5em;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        #messageInput:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        #sendButton {
+            padding: 12px 24px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+
+        #sendButton:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        #sendButton:active {
+            transform: translateY(0);
+        }
+
+        #result {
+            border: 2px solid #e0e0e0;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            min-height: 200px;
+            margin-top: 20px;
+            font-size: 16px;
+            line-height: 1.5;
+            background-color: white;
+        }
+
+        .image-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .generated-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error-message {
+            color: #dc3545;
+            padding: 10px;
+            border-radius: var(--border-radius);
+            background-color: #fff3f3;
+            margin-top: 10px;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: var(--border-radius);
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI表情包生成器</h1>
+        </div>
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="请输入表情包描述，例如：'开心的柴犬'...">
+            <button id="sendButton">生成表情包</button>
+        </div>
+        <div id="result">
+            <div class="image-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://ai-biaoqingbao.dkcccch1026.workers.dev/';
+
+        document.getElementById('sendButton').addEventListener('click', async () => {
+            const input = document.getElementById('messageInput');
+            const result = document.getElementById('result');
+            const data = input.value.trim();
+            
+            if (!data) {
+                alert('请输入表情包描述！');
+                return;
+            }
+
+            // 清空之前的内容
+            result.innerHTML = '<div class="loading">正在生成你的表情包...</div>';
+            
+            try {
+                const response = await fetch(`${WORKER_URL}?data=${encodeURIComponent(data)}`);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                let buffer = '';
+                let imageUrl = null;
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    buffer += text;
+
+                    // 处理事件流
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop() || '';
+
+                    for (const event of events) {
+                        if (!event.trim()) continue;
+
+                        const [eventLine, dataLine] = event.split('\n');
+                        if (!dataLine) continue;
+
+                        const data = dataLine.replace('data:', '');
+                        try {
+                            const parsedData = JSON.parse(data);
+                            
+                            // 提取图片URL
+                            if (parsedData.type === 'answer' && parsedData.content) {
+                                imageUrl = parsedData.content;
+                            }
+                            
+                            // 显示完成状态
+                            if (eventLine.includes('conversation.chat.completed')) {
+                                const usage = parsedData.usage;
+                                result.innerHTML = `
+                                    <div class="image-container">
+                                        <img src="${imageUrl}" alt="生成的表情包" class="generated-image">
+                                    </div>
+                                    <div class="status">✨ 生成完成 (消耗: ${usage.token_count} tokens)</div>
+                                `;
+                            }
+                        } catch (e) {
+                            console.error('处理消息时出错:', e);
+                        }
+                    }
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="error-message">
+                        <strong>😢 出错了：</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
